@@ -1,0 +1,121 @@
+This file includes the OpenStack commands for automating the OPNFV IPv6
+POC (i.e., ServiceVM as an IPv6 Router).
+=======================================================================
+
+Assumptions:
+------------
+The steps mentioned below are for a two node setup.
+PLEASE makesure that hostnames are set as shown below as we are referring to these hostnames in commands below while spawning the VMs (alternately you can modify the hostnames in the commands below to match your setup).
+1. opnfv-os-controller (OpenStack controller + Network + Compute node)
+2. opnfv-os-compute (OpenStack compute node)
+
+For example:
+~/devstack$ nova hypervisor-list
++----+------------------------------------+---------+------------+
+| ID  | Hypervisor hostname      | State  | Status  |
++----+------------------------------------+---------+------------+
+| 1   | opnfv-os-controller      | up     | enabled |
+| 2   | opnfv-os-compute         | up     | enabled |
++----+------------------------------------+---------+------------+
+
+It is assumed that you have cloned the following repo to the path shown below.
+git clone https://github.com/sridhargaddam/opnfv_os_ipv6_poc.git /opt/stack/opnfv_os_ipv6_poc
+
+To disable Security Groups in OpenStack ML2 setup:
+-----------------------------------------------------------------------------------
+# /etc/neutron/plugins/ml2/ml2_conf.ini
+[securitygroup]
+enable_security_group = False
+firewall_driver = neutron.agent.firewall.NoopFirewallDriver
+
+# /etc/nova/nova.conf
+[DEFAULT]
+security_group_api = nova
+firewall_driver = nova.virt.firewall.NoopFirewallDriver
+
+Fedora22 Cloud image can be downloaded from the following URL:
+--------------------------------------------------------------
+https://download.fedoraproject.org/pub/fedora/linux/releases/22/Cloud/x86_64/Images/Fedora-Cloud-Base-22-20150521.x86_64.qcow2
+
+OpenStack Commands (after the multi-node setup is up and running):
+------------------------------------------------------------------
+The following commands can be executed to create the OPNFV IPv6 POC (serviceVM as an IPv6 vRouter) in a Native OpenStack setup.
+Note: I've verified the commands with the latest openstack code (dated 20/dec/2015). It should ideally be working even for stable/liberty release.
+
+1. cd ~/devstack
+2. source openrc admin demo
+3. Download Fedora22 image.
+    wget https://download.fedoraproject.org/pub/fedora/linux/releases/22/Cloud/x86_64/Images/Fedora-Cloud-Base-22-20150521.x86_64.qcow2
+4. Import Fedora22 image (which will be used as vRouter) to glance.
+    glance image-create --name 'Fedora20' --disk-format qcow2 --container-format bare --file ./Fedora-Cloud-Base-22-20150521.x86_64.qcow2
+5. neutron router-create ipv4-router
+6. neutron net-create --router:external ext-net
+7. If your opnfv-os-controller node has two interfaces (eth0, eth1) and eth1 is used for external connectivity, move the IPaddress of eth1 to br-ex.
+    Note: Assuming that 198.59.156.113 is the IPAddress assigned to eth1, the following command would move the address to br-ex.
+    sudo ip addr del 198.59.156.113/24 dev eth1 && sudo ovs-vsctl add-port br-ex eth1 && sudo ifconfig eth1 up &&  sudo ip addr add 198.59.156.113/24 dev br-ex && sudo ifconfig br-ex up && sudo ip route add default via 198.59.156.1 dev br-ex
+    neutron subnet-create --disable-dhcp --allocation-pool start=198.59.156.251,end=198.59.156.254 --gateway 198.59.156.1 ext-net 198.59.156.0/24
+    The steps shown above would have to be suitably modified to suit your physical infrastructure.
+
+    Before moving forward, verify that external connectivity is properly configured.
+    ~/devstack$ ip a s br-ex
+     38: br-ex: <BROADCAST,UP,LOWER_UP> mtu 1430 qdisc noqueue state UNKNOWN group default
+     link/ether 00:50:56:82:42:d1 brd ff:ff:ff:ff:ff:ff
+     inet 198.59.156.113/24 brd 198.59.156.255 scope global br-ex
+        valid_lft forever preferred_lft forever
+     inet6 fe80::543e:28ff:fe70:4426/64 scope link
+        valid_lft forever preferred_lft forever
+     ~/devstack$
+     ~/devstack$ ip route
+      default via 198.59.156.1 dev br-ex
+     10.134.156.0/24 dev eth0  proto kernel  scope link  src 10.134.156.113
+     <snip>
+
+8. Create Neutron networks with port_security disabled.
+    neutron net-create --port_security_enabled=False ipv4-int-network1
+    neutron net-create --port_security_enabled=False ipv6-int-network2
+9. neutron subnet-create --name ipv4-int-subnet1 --dns-nameserver 8.8.8.8 ipv4-int-network1 20.0.0.0/24
+10. neutron router-interface-add ipv4-router ipv4-int-subnet1
+11. neutron router-create ipv6-router
+12. Associate the gateway with ext-net.
+     neutron router-gateway-set ipv4-router ext-net
+     neutron router-gateway-set ipv6-router ext-net
+13. neutron subnet-create --name ipv4-int-subnet2 --dns-nameserver 8.8.8.8 ipv6-int-network2 10.0.0.0/24
+14. neutron subnet-create --name ipv6-int-subnet2 --ip-version 6 --ipv6-ra-mode slaac --ipv6-address-mode slaac ipv6-int-network2 2001:db8:0:1::/64
+15. neutron router-interface-add ipv6-router ipv4-int-subnet2
+16. neutron router-interface-add ipv6-router ipv6-int-subnet2
+17. nova keypair-add vRouterKey > ~/vRouterKey
+18. Create ports for vRouter (with some specific MAC address - basically for automation - to know the IPv6 addresses that would be assigned to the port).
+neutron port-create --name eth0-vRouter --mac-address fa:16:3e:11:11:11 ipv6-int-network2
+neutron port-create --name eth1-vRouter --mac-address fa:16:3e:22:22:22 ipv4-int-network1
+19. Lets create ports for VM1 and VM2.
+neutron port-create --name eth0-VM1 --mac-address fa:16:3e:33:33:33 ipv4-int-network1
+neutron port-create --name eth0-VM2 --mac-address fa:16:3e:44:44:44 ipv4-int-network1
+20. neutron router-update ipv6-router --routes type=dict list=true destination=2001:db8:0:2::/64,nexthop=2001:db8:0:1:f816:3eff:fe11:1111
+21. nova boot --image Fedora20 --flavor m1.small --user-data /opt/stack/opnfv_os_ipv6_poc/metadata.txt --availability-zone nova:opnfv-os-compute --nic port-id=$(neutron port-list | grep -w eth0-vRouter | awk '{print $2}') --nic port-id=$(neutron port-list | grep -w eth1-vRouter | awk '{print $2}') --key-name vRouterKey vRouter
+22. nova list
+23. nova console-log vRouter #Please wait for some 10 to 15 mins so that necessary packages (like radvd) are installed and vRouter is up.
+24. nova boot --image cirros-0.3.4-x86_64-uec --flavor m1.tiny --nic port-id=$(neutron port-list | grep -w eth0-VM1 | awk '{print $2}') --availability-zone nova:opnfv-os-controller --key-name vRouterKey --user-data /opt/stack/opnfv_os_ipv6_poc/set_mtu.sh VM1
+25. nova boot --image cirros-0.3.4-x86_64-uec --flavor m1.tiny --nic port-id=$(neutron port-list | grep -w eth0-VM2 | awk '{print $2}') --availability-zone nova:opnfv-os-compute --key-name vRouterKey --user-data /opt/stack/opnfv_os_ipv6_poc/set_mtu.sh VM2
+22. nova list # Verify that all the VMs are in ACTIVE state.
+
+If all goes well, the IPv6 addresses assigned to the VMs would be as shown below.
+--------------------------------------------------------------------------------------------------------------------------------
+vRouter eth0 iface would have the following IPv6 address: 2001:db8:0:1:f816:3eff:fe11:1111/64
+vRouter eth1 iface would have the following IPv6 address: 2001:db8:0:2::1/64
+VM1 would have the following IPv6 address: 2001:db8:0:2:f816:3eff:fe33:3333/64
+VM2 would have the following IPv6 address: 2001:db8:0:2:f816:3eff:fe44:4444/64
+
+To SSH to vRouter, you can execute the following command.
+------------------------------------------------------------------------------------------
+sudo ip netns exec qrouter-$(neutron router-list | grep -w ipv6-router | awk '{print $2}') ssh -i ~/vRouterKey fedora@2001:db8:0:1:f816:3eff:fe11:1111
+
+Miscellaneous:
+------------------------
+We are adding some static routes to the ipv6-router.
+Now, for some reason, if we want to delete the router or dissociate the ipv6-router from ipv6-int-subnet2, neutron will not allow the operation as the static route requires the ipv6-int-subnet2 subnet. To overcome this issue, and to clear the static routes associated to the ipv6-router execute the following.
+neutron router-update ipv6-router --routes action=clear
+
+
+
+
+
