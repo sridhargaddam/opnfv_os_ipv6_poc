@@ -1,5 +1,6 @@
 # Devstack configuration file.
 # local.conf file for OpenStack Compute Node.
+# COPY THIS FILE TO YOUR "devstack" FOLDER AND RENAME IT TO "local.conf"
 # You will have to update the following options below to match your setup.
 # SERVICE_HOST -> Should point to the OpenStack controller node.
 

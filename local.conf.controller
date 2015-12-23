@@ -1,5 +1,6 @@
 # Devstack configuration file.
 # local.conf file for OpenStack Controller + Network + Compute Node.
+# COPY THIS FILE TO YOUR "devstack" FOLDER AND RENAME IT TO "local.conf"
 
 [[local|localrc]]
 RECLONE=yes
