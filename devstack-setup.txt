@@ -1,0 +1,51 @@
+Instructions to create an OpenStack Multi-node setup using Devstack.
+-------------------------------------------------------------------
+
+Clone the opnfv_os_ipv6_poc git repo for configuration files.
+-------------------------------------------------------------
+git clone https://github.com/sridhargaddam/opnfv_os_ipv6_poc.git /opt/stack/opnfv_os_ipv6_poc
+
+
+OpenStack Controller+Network+Compute Node (HOST_IP: 192.168.0.10).
+-----------------------------------------------------------------
+
+1. Clone stable/lithium devstack codebase.
+   git clone https://github.com/openstack-dev/devstack.git -b stable/liberty
+
+2. Copy local.conf.controller to devstack as local.conf
+   cp /opt/stack/local.conf.controller ~/devstack/local.conf
+
+3. If you want to modify any devstack configuration, update local.conf now.
+
+4. Start the devstack installation.
+   cd ~/devstack
+   ./stack.sh
+
+5. If all goes well, you should see the following output.
+
+   This is your host IP address: 192.168.0.10
+   This is your host IPv6 address: ::1
+   Keystone is serving at http://192.168.0.10:5000/
+   The default users are: admin and demo
+   The password: password
+
+OpenStack Compute Node Setup (HOST_IP: 192.168.0.20).
+-----------------------------------------------------
+
+1. Clone stable/lithium devstack codebase.
+   git clone https://github.com/openstack-dev/devstack.git -b stable/liberty
+
+2. Copy local.conf.compute to devstack as local.conf
+   cp /opt/stack/local.conf.compute ~/devstack/local.conf
+
+3. If you want to modify any devstack configuration, update local.conf now.
+
+4. Start the devstack installation.
+   cd ~/devstack
+   ./stack.sh
+
+5. If all goes well, you should see the following output.
+
+   This is your host IP address: 192.168.0.20
+   This is your host IPv6 address: ::1
+
