@@ -1,0 +1,63 @@
+#local.conf for OpenStack+ODL Compute node.
+[[local|localrc]]
+MULTI_HOST=1
+LOG_COLOR=True
+
+# For the first time set RECLONE to Yes and OFFLINE to False.
+# During subsequent runs, you can set RECLONE to no and OFFLINE to True.
+RECLONE=yes
+#OFFLINE=true
+
+# SERVICE_HOST should point to the Control Node.
+SERVICE_HOST=192.168.0.10
+
+Q_HOST=$SERVICE_HOST
+MYSQL_HOST=$SERVICE_HOST
+RABBIT_HOST=$SERVICE_HOST
+GLANCE_HOSTPORT=$SERVICE_HOST:9292
+KEYSTONE_AUTH_HOST=$SERVICE_HOST
+KEYSTONE_SERVICE_HOST=$SERVICE_HOST
+
+ADMIN_PASSWORD=password
+MYSQL_PASSWORD=$ADMIN_PASSWORD
+RABBIT_PASSWORD=$ADMIN_PASSWORD
+SERVICE_PASSWORD=$ADMIN_PASSWORD
+SERVICE_TOKEN=tokennekot
+
+BRANCH=stable/kilo
+GLANCE_BRANCH=$BRANCH
+HORIZON_BRANCH=$BRANCH
+KEYSTONE_BRANCH=$BRANCH
+NOVA_BRANCH=$BRANCH
+NEUTRON_BRANCH=$BRANCH
+SWIFT_BRANCH=$BRANCH
+CINDER_BRANCH=$BRANCH
+HEAT_BRANCH=$BRANCH
+TROVE_BRANCH=$BRANCH
+CEILOMETER_BRANCH=$BRANCH
+
+SCREEN_LOGDIR=$DEST/logs/screen
+LOGFILE=$DEST/logs/stack.sh.log
+
+NEUTRON_CREATE_INITIAL_NETWORKS=False
+Q_PLUGIN=ml2
+ENABLE_TENANT_TUNNELS=True
+Q_ML2_TENANT_NETWORK_TYPE=vxlan
+enable_plugin networking-odl https://github.com/stackforge/networking-odl stable/kilo
+
+VNCSERVER_LISTEN=0.0.0.0
+
+ODL_MODE=manual
+ODL_PROVIDER_MAPPINGS=physnet1:eth2
+PUBLIC_INTERFACE=eth2
+
+# Configure the ODL_MGR_IP IPAddress to point to the ODL Controller
+ODL_MGR_IP=192.168.0.30
+ODL_PORT=8080
+
+disable_all_services
+enable_service n-cpu odl-compute
+
+[[post-config|/etc/neutron/plugins/ml2/ml2_conf.ini]]
+[agent]
+minimize_polling=True
